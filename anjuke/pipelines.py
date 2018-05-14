@@ -49,3 +49,42 @@ class AnjukePipeline(object):
             return None if not 'completetime' in item.keys() else item['completetime']
         if j == 9:
             return None if not 'url' in item.keys() else item['url']
+			
+			
+class AnjuKeMySqlPipeline(object):
+    def __init__(self, host, port, user, password, database):
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(
+            host=crawler.settings.get('MYSQL_HOST'),
+            port=crawler.settings.get('MYSQL_PORT'),
+            user=crawler.settings.get('MYSQL_USER'),
+            password=crawler.settings.get('MYSQL_PASSWORD'),
+            database=crawler.settings.get('MYSQL_DB')
+        )
+
+    def open_spider(self, spider):
+        self.db = pymysql.connect(host=self.host, port=self.port, user=self.user, password=self.password, database=self.database, charset='utf8')
+        self.cursor = self.db.cursor()
+
+    def close_spider(self, spider):
+        self.cursor.close()
+        self.db.close()
+
+    def process_item(self, item, spider):
+        data = dict(item)
+        keys = ', '.join(data.keys())
+        values = ', '.join(['%s'] * len(data))
+        sql = 'insert into {table}({keys}) values ({values})'.format(table=item.collection, keys=keys, values=values)
+        try:
+            self.cursor.execute(sql, tuple(data.values()))
+            self.db.commit()
+        except:
+            self.db.rollback()
+        return item
